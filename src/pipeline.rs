@@ -279,6 +279,17 @@ impl VideoPipeline {
             ..
         } = self.videos.get(&video_id).unwrap();
 
+        // don't know the exact reason of the crash, bit mitigate it until a reason can be found
+
+        let frame_data = if let Some(frame_data) = frame.get(..(width * height) as usize) {
+            frame_data
+        } else {
+            dbg!("frame data have wrong size");
+            dbg!(frame);
+            dbg!(format!("with: {width}height: {height}"));
+            return;
+        };
+
         queue.write_texture(
             wgpu::TexelCopyTextureInfo {
                 texture: texture_y,
@@ -286,7 +297,7 @@ impl VideoPipeline {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            &frame[..(stride * height) as usize],
+            frame_data,
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(stride),
@@ -299,6 +310,16 @@ impl VideoPipeline {
             },
         );
 
+        // no crash, but make more secure.
+        let frame_data = if let Some(frame_data) = frame.get((width * height) as usize..) {
+            frame_data
+        } else {
+            dbg!("frame data have wrong size");
+            dbg!(frame);
+            dbg!(format!("with: {width}height: {height}"));
+            return;
+        };
+
         queue.write_texture(
             wgpu::TexelCopyTextureInfo {
                 texture: texture_uv,
@@ -306,7 +327,7 @@ impl VideoPipeline {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            &frame[(stride * height) as usize..],
+            frame_data,
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(stride),
