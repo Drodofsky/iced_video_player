@@ -6,7 +6,7 @@ use iced::{
 };
 use iced_wgpu::primitive::Renderer as PrimitiveRenderer;
 use log::error;
-use std::{marker::PhantomData, sync::atomic::Ordering};
+use std::{marker::PhantomData, sync::atomic::Ordering, time::Duration};
 use std::{sync::Arc, time::Instant};
 
 /// Video player widget which displays the current frame of a [`Video`](crate::Video).
@@ -285,7 +285,7 @@ where
 
                 shell.request_redraw();
             } else {
-                shell.request_redraw();
+                shell.request_redraw_at(Instant::now() + Duration::from_millis(32));
             }
         } else {
         }
