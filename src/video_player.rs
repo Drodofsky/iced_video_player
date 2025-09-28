@@ -1,9 +1,11 @@
 use crate::{pipeline::VideoPrimitive, video::Video};
+use gstreamer as gst;
 use iced::{
     advanced::{self, layout, widget, Widget},
     Element,
 };
 use iced_wgpu::primitive::Renderer as PrimitiveRenderer;
+use log::error;
 use std::{marker::PhantomData, sync::atomic::Ordering};
 use std::{sync::Arc, time::Instant};
 
@@ -207,6 +209,85 @@ where
             renderer.with_layer(bounds, render);
         } else {
             render(renderer);
+        }
+    }
+    fn update(
+        &mut self,
+        _state: &mut widget::Tree,
+        event: &iced::Event,
+        _layout: advanced::Layout<'_>,
+        _cursor: advanced::mouse::Cursor,
+        _renderer: &Renderer,
+        _clipboard: &mut dyn advanced::Clipboard,
+        shell: &mut advanced::Shell<'_, Message>,
+        _viewport: &iced::Rectangle,
+    ) {
+        let mut inner = self.video.write();
+
+        if let iced::Event::Window(iced::window::Event::RedrawRequested(_)) = event {
+            if inner.restart_stream || (!inner.is_eos && !inner.paused()) {
+                let mut restart_stream = false;
+                if inner.restart_stream {
+                    restart_stream = true;
+                    // Set flag to false to avoid potentially multiple seeks
+                    inner.restart_stream = false;
+                }
+                let mut eos_pause = false;
+
+                while let Some(msg) = inner
+                    .bus
+                    .pop_filtered(&[gst::MessageType::Error, gst::MessageType::Eos])
+                {
+                    match msg.view() {
+                        gst::MessageView::Error(err) => {
+                            error!("bus returned an error: {err}");
+                            if let Some(ref on_error) = self.on_error {
+                                shell.publish(on_error(&err.error()))
+                            };
+                        }
+                        gst::MessageView::Eos(_eos) => {
+                            if let Some(on_end_of_stream) = self.on_end_of_stream.clone() {
+                                shell.publish(on_end_of_stream);
+                            }
+                            if inner.looping {
+                                restart_stream = true;
+                            } else {
+                                eos_pause = true;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+
+                // Don't run eos_pause if restart_stream is true; fixes "pausing" after restarting a stream
+                if restart_stream {
+                    if let Err(err) = inner.restart_stream() {
+                        error!("cannot restart stream (can't seek): {err:#?}");
+                    }
+                } else if eos_pause {
+                    inner.is_eos = true;
+                    inner.set_paused(true);
+                }
+
+                if inner.upload_frame.load(Ordering::SeqCst) {
+                    if let Some(on_new_frame) = self.on_new_frame.clone() {
+                        shell.publish(on_new_frame);
+                    }
+                }
+
+                if let Some(on_subtitle_text) = &self.on_subtitle_text {
+                    if inner.upload_text.swap(false, Ordering::SeqCst) {
+                        if let Ok(text) = inner.subtitle_text.try_lock() {
+                            shell.publish(on_subtitle_text(text.clone()));
+                        }
+                    }
+                }
+
+                shell.request_redraw();
+            } else {
+                shell.request_redraw();
+            }
+        } else {
         }
     }
     /*
