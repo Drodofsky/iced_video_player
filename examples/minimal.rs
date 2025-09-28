@@ -6,7 +6,7 @@ use iced_video_player::{Video, VideoPlayer};
 use std::time::Duration;
 
 fn main() -> iced::Result {
-    iced::run("Iced Video Player", App::update, App::view)
+    iced::run(App::update, App::view)
 }
 
 #[derive(Clone, Debug)]

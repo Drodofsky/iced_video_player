@@ -1,12 +1,10 @@
 use crate::{pipeline::VideoPrimitive, video::Video};
-use gstreamer as gst;
 use iced::{
-    advanced::{self, graphics::core::event::Status, layout, widget, Widget},
+    advanced::{self, layout, widget, Widget},
     Element,
 };
 use iced_wgpu::primitive::Renderer as PrimitiveRenderer;
-use log::error;
-use std::{marker::PhantomData, sync::atomic::Ordering, time::Duration};
+use std::{marker::PhantomData, sync::atomic::Ordering};
 use std::{sync::Arc, time::Instant};
 
 /// Video player widget which displays the current frame of a [`Video`](crate::Video).
@@ -121,7 +119,7 @@ where
     }
 
     fn layout(
-        &self,
+        &mut self,
         _tree: &mut widget::Tree,
         _renderer: &Renderer,
         limits: &layout::Limits,
@@ -211,7 +209,7 @@ where
             render(renderer);
         }
     }
-
+    /*
     fn on_event(
         &mut self,
         _state: &mut widget::Tree,
@@ -294,7 +292,7 @@ where
         } else {
             Status::Ignored
         }
-    }
+    }*/
 }
 
 impl<'a, Message, Theme, Renderer> From<VideoPlayer<'a, Message, Theme, Renderer>>

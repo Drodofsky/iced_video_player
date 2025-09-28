@@ -1,6 +1,7 @@
 use crate::video::Frame;
-use iced_wgpu::primitive::Primitive;
+use iced::wgpu::PipelineCompilationOptions;
 use iced_wgpu::wgpu;
+use iced_wgpu::{graphics::Viewport, primitive::Primitive};
 use std::{
     collections::{btree_map::Entry, BTreeMap},
     num::NonZero,
@@ -28,7 +29,7 @@ struct VideoEntry {
     render_index: AtomicUsize,
 }
 
-struct VideoPipeline {
+pub(crate) struct VideoPipeline {
     pipeline: wgpu::RenderPipeline,
     bg0_layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
@@ -92,10 +93,12 @@ impl VideoPipeline {
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("iced_video_player pipeline"),
+            cache: None,
             layout: Some(&layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
+                compilation_options: PipelineCompilationOptions::default(),
                 buffers: &[],
             },
             primitive: wgpu::PrimitiveState::default(),
@@ -107,7 +110,8 @@ impl VideoPipeline {
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
+                compilation_options: PipelineCompilationOptions::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format,
                     blend: None,
@@ -182,6 +186,8 @@ impl VideoPipeline {
 
             let view_y = texture_y.create_view(&wgpu::TextureViewDescriptor {
                 label: Some("iced_video_player texture view"),
+                // TODO check if necessary
+                usage: None,
                 format: None,
                 dimension: None,
                 aspect: wgpu::TextureAspect::All,
@@ -193,6 +199,8 @@ impl VideoPipeline {
 
             let view_uv = texture_uv.create_view(&wgpu::TextureViewDescriptor {
                 label: Some("iced_video_player texture view"),
+                // TODO check if necessary
+                usage: None,
                 format: None,
                 dimension: None,
                 aspect: wgpu::TextureAspect::All,
@@ -266,14 +274,14 @@ impl VideoPipeline {
         };
 
         queue.write_texture(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfoBase {
                 texture: texture_y,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
             frame_data,
-            wgpu::ImageDataLayout {
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(width),
                 rows_per_image: Some(height),
@@ -296,14 +304,14 @@ impl VideoPipeline {
         };
 
         queue.write_texture(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfoBase {
                 texture: texture_uv,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
             frame_data,
-            wgpu::ImageDataLayout {
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(width),
                 rows_per_image: Some(height / 2),
@@ -371,6 +379,8 @@ impl VideoPipeline {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("iced_video_player render pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    // TODO check if necessary
+                    depth_slice: None,
                     view: target,
                     resolve_target: None,
                     ops: wgpu::Operations {
@@ -429,24 +439,28 @@ impl VideoPrimitive {
 }
 
 impl Primitive for VideoPrimitive {
-    fn prepare(
+    type Renderer = VideoPipeline;
+    fn initialize(
         &self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         format: wgpu::TextureFormat,
-        storage: &mut iced_wgpu::primitive::Storage,
+    ) -> Self::Renderer {
+        VideoPipeline::new(device, format)
+    }
+
+    /// Processes the [`Primitive`], allowing for GPU buffer allocation.
+    fn prepare(
+        &self,
+        renderer: &mut Self::Renderer,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
         bounds: &iced::Rectangle,
-        viewport: &iced_wgpu::graphics::Viewport,
+        viewport: &Viewport,
     ) {
-        if !storage.has::<VideoPipeline>() {
-            storage.store(VideoPipeline::new(device, format));
-        }
-
-        let pipeline = storage.get_mut::<VideoPipeline>().unwrap();
-
         if self.upload_frame {
             if let Some(readable) = self.frame.lock().expect("lock frame mutex").readable() {
-                pipeline.upload(
+                renderer.upload(
                     device,
                     queue,
                     self.video_id,
@@ -457,7 +471,7 @@ impl Primitive for VideoPrimitive {
             }
         }
 
-        pipeline.prepare(
+        renderer.prepare(
             queue,
             self.video_id,
             &(*bounds
@@ -468,14 +482,35 @@ impl Primitive for VideoPrimitive {
         );
     }
 
+    /// Draws the [`Primitive`] in the given [`wgpu::RenderPass`].
+    ///
+    /// When possible, this should be implemented over [`render`](Self::render)
+    /// since reusing the existing render pass should be considerably more
+    /// efficient than issuing a new one.
+    ///
+    /// The viewport and scissor rect of the render pass provided is set
+    /// to the bounds and clip bounds of the [`Primitive`], respectively.
+    ///
+    /// If you have complex composition needs, then you can leverage
+    /// [`render`](Self::render) by returning `false` here.
+    ///
+    /// By default, it does nothing and returns `false`.
+    fn draw(&self, _renderer: &Self::Renderer, _render_pass: &mut wgpu::RenderPass<'_>) -> bool {
+        false
+    }
+
+    /// Renders the [`Primitive`], using the given [`wgpu::CommandEncoder`].
+    ///
+    /// This will only be called if [`draw`](Self::draw) returns `false`.
+    ///
+    /// By default, it does nothing.
     fn render(
         &self,
+        renderer: &Self::Renderer,
         encoder: &mut wgpu::CommandEncoder,
-        storage: &iced_wgpu::primitive::Storage,
         target: &wgpu::TextureView,
         clip_bounds: &iced::Rectangle<u32>,
     ) {
-        let pipeline = storage.get::<VideoPipeline>().unwrap();
-        pipeline.draw(target, encoder, clip_bounds, self.video_id);
+        renderer.draw(target, encoder, clip_bounds, self.video_id);
     }
 }
