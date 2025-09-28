@@ -443,7 +443,7 @@ impl Primitive for VideoPrimitive {
     fn initialize(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        _queue: &wgpu::Queue,
         format: wgpu::TextureFormat,
     ) -> Self::Renderer {
         VideoPipeline::new(device, format)

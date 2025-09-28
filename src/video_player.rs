@@ -8,6 +8,7 @@ use iced_wgpu::primitive::Renderer as PrimitiveRenderer;
 use log::error;
 use std::{marker::PhantomData, sync::atomic::Ordering, time::Duration};
 use std::{sync::Arc, time::Instant};
+type ErrorFn<'a, T> = Box<dyn Fn(&glib::Error) -> T + 'a>;
 
 /// Video player widget which displays the current frame of a [`Video`](crate::Video).
 pub struct VideoPlayer<'a, Message, Theme = iced::Theme, Renderer = iced::Renderer>
@@ -21,7 +22,7 @@ where
     on_end_of_stream: Option<Message>,
     on_new_frame: Option<Message>,
     on_subtitle_text: Option<Box<dyn Fn(Option<String>) -> Message + 'a>>,
-    on_error: Option<Box<dyn Fn(&glib::Error) -> Message + 'a>>,
+    on_error: Option<ErrorFn<'a, Message>>,
     _phantom: PhantomData<(Theme, Renderer)>,
 }
 
