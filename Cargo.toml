@@ -15,8 +15,12 @@ exclude = [
     ".media/test.mp4"
 ]
 
+[features]
+default = ["web-colors"]
+web-colors = ["iced/web-colors"]
+
 [dependencies]
-iced = { git = "https://github.com/iced-rs/iced.git", features = ["image", "advanced", "wgpu","tokio","tiny-skia","crisp","thread-pool","linux-theme-detection"],default-features = false }
+iced = { git = "https://github.com/iced-rs/iced.git", features = ["image", "advanced", "wgpu"]}
 iced_wgpu = {git = "https://github.com/iced-rs/iced.git"}
 gstreamer = "0.23"
 gstreamer-app = "0.23" # appsink

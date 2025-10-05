@@ -38,9 +38,14 @@ pub(crate) struct VideoPipeline {
 
 impl VideoPipeline {
     fn new(device: &wgpu::Device, format: wgpu::TextureFormat) -> Self {
+        let shader_source = if cfg!(feature = "web-colors") {
+            include_str!("shader_web_colors.wgsl")
+        } else {
+            include_str!("shader.wgsl")
+        };
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("iced_video_player shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(shader_source.into()),
         });
 
         let bg0_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
