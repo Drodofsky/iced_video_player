@@ -285,7 +285,7 @@ impl VideoPipeline {
             frame_data
         } else {
             dbg!("frame data have wrong size");
-            dbg!(frame);
+            dbg!(frame.len());
             dbg!(format!("with: {width}height: {height}"));
             return;
         };
@@ -315,7 +315,7 @@ impl VideoPipeline {
             frame_data
         } else {
             dbg!("frame data have wrong size");
-            dbg!(frame);
+            dbg!(frame.len());
             dbg!(format!("with: {width}height: {height}"));
             return;
         };
